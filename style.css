@@ -1,0 +1,16 @@
+body {
+  background: white;
+}
+
+.cat {
+  width: 384px;             /* 单帧宽度 */
+  height: 512px;            /* 单帧高度 */
+  background-image: url("cat_walk.png");
+  background-repeat: no-repeat;
+  animation: walk 0.6s steps(4) infinite;
+}
+
+@keyframes walk {
+  from { background-position: 0 0; }
+  to   { background-position: -1536px 0; }
+}
