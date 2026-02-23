@@ -32,15 +32,18 @@
       walk: {
         key: "walk",
         frames: ["walk1.png", "walk2.png", "walk3.png", "walk4.png"],
-        fps: 10,                 // 走路帧率（越高越“快腿”）
+        fps: 10,
         loop: true,
-        move: { vx: -120, vy: 0 },// px/s：负数=从右往左走（符合你这组图）
-        weight: 1.0              // 随机选择权重（以后多动作时用）
+        move: { vx: -120, vy: 0 },
       },
 
-      // 以后你加动作就照这个格式：
-      // sleep: { frames:["sleep1.png","sleep2.png","sleep3.png","sleep4.png"], fps:6, loop:true, move:null, weight:0.7 },
-      // yawn:  { frames:["yawn1.png","yawn2.png","yawn3.png","yawn4.png"], fps:8, loop:false, duration:1200, move:null, weight:0.3 },
+      pounce: {
+        key: "pounce",
+        frames: ["pounce1.png", "pounce2.png", "pounce3.png", "pounce4.png"],
+        fps: 12,
+        loop: false,
+        move: null
+      }
     };
 
     /********************
@@ -69,102 +72,125 @@
     /********************
      * 3) 猫实体（动作切换 + 帧动画 + 位移）
      ********************/
-    class Cat {
-      constructor(el) {
-        this.el = el;
+class Cat {
+  constructor(el) {
+    this.el = el;
 
-        // 位置：从右侧外面进场
-        this.x = window.innerWidth + 50;
-        this.y = this.randomY();
+    this.width = 180;
 
-        // 动作状态
-        this.action = null;
-        this.frameIndex = 0;
-        this.frameTimer = 0;
+    this.x = window.innerWidth + 50;
+    this.y = this.randomY();
 
-        // 用于非 loop 动作
-        this.actionTimer = 0;
+    this.action = null;
+    this.frameIndex = 0;
+    this.frameTimer = 0;
 
-        this.setAction(ACTIONS.walk);
-        this.applyPosition();
-      }
+    this.state = "walk";  // walk | pounce | rest
+    this.stateTimer = 0;
 
-      randomY() {
-        // 让它“上面也能走”，随机在 15%~85% 屏幕高度之间
-        const h = window.innerHeight;
-        const min = h * 0.15;
-        const max = h * 0.85;
-        return min + Math.random() * (max - min);
-      }
+    this.walkDuration = this.randomWalkDuration();
+    this.restDuration = 0;
 
-      setAction(action) {
-        this.action = action;
-        this.frameIndex = 0;
-        this.frameTimer = 0;
-        this.actionTimer = 0;
-        this.el.src = action.frames[0];
-      }
+    this.setAction(ACTIONS.walk);
+    this.applyPosition();
+  }
 
-      update(dt) {
-        // dt: 秒
-        // 1) 帧动画
-        const frameDuration = 1 / (this.action.fps || 8);
-        this.frameTimer += dt;
-        while (this.frameTimer >= frameDuration) {
-          this.frameTimer -= frameDuration;
-          this.frameIndex++;
+  randomY() {
+    const h = window.innerHeight;
 
-          if (this.frameIndex >= this.action.frames.length) {
-            if (this.action.loop) {
-              this.frameIndex = 0;
-            } else {
-              // 非循环动作：停在最后一帧
-              this.frameIndex = this.action.frames.length - 1;
-            }
-          }
-          this.el.src = this.action.frames[this.frameIndex];
+    // 避开底部 120px（模拟避开 Dock / 任务栏）
+    const bottomSafe = 120;
+
+    const min = h * 0.2;
+    const max = h - bottomSafe;
+
+    return min + Math.random() * (max - min);
+  }
+
+  randomWalkDuration() {
+    return 2000 + Math.random() * 3000; // 2~5 秒
+  }
+
+  randomRestDuration() {
+    return 1500 + Math.random() * 2500; // 1.5~4 秒
+  }
+
+  setAction(action) {
+    this.action = action;
+    this.frameIndex = 0;
+    this.frameTimer = 0;
+    this.el.src = action.frames[0];
+  }
+
+  update(dt) {
+    const frameDuration = 1 / (this.action.fps || 8);
+    this.frameTimer += dt;
+
+    while (this.frameTimer >= frameDuration) {
+      this.frameTimer -= frameDuration;
+      this.frameIndex++;
+
+      if (this.frameIndex >= this.action.frames.length) {
+        if (this.action.loop) {
+          this.frameIndex = 0;
+        } else {
+          this.frameIndex = this.action.frames.length - 1;
         }
-
-        // 2) 位移：只有 move 的动作才移动（walk）
-        if (this.action.move) {
-          this.x += this.action.move.vx * dt;
-          this.y += (this.action.move.vy || 0) * dt;
-        }
-
-        // 3) 出屏幕后重新从右侧进入（只往前走，不后退）
-        const offLeft = this.x < -250; // 250 取决于猫宽度，可调
-        if (offLeft) {
-          this.x = window.innerWidth + 50;
-          this.y = this.randomY();
-        }
-
-        // 4) 动作切换框架（先保留，当前只有 walk 就不会真的换）
-        //    以后你加了其他动作（sleep/yawn/play等），这里就会生效
-        this.actionTimer += dt * 1000; // ms
-        const shouldSwitch =
-          Object.keys(ACTIONS).length > 1 &&                // 有多动作时才切
-          (this.action.loop ? this.actionTimer > 3500 :     // loop 动作跑一会儿再考虑切
-                             this.actionTimer > (this.action.duration || 1200));
-
-        if (shouldSwitch) {
-          this.actionTimer = 0;
-
-          // 规则：如果正在走路，可小概率切到别的；如果在别的动作结束，再切回走路
-          const next = weightedPick(ACTIONS);
-          this.setAction(next);
-
-          // 若切到“静止动作”，可以让它停住（move:null），并保持当前位置
-          // 若切回 walk，会继续从当前位置往左走
-        }
-
-        this.applyPosition();
       }
 
-      applyPosition() {
-        // 用 transform 保持性能
-        this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
-      }
+      this.el.src = this.action.frames[this.frameIndex];
     }
+
+    this.stateTimer += dt * 1000;
+
+    switch (this.state) {
+
+      case "walk":
+        this.x += this.action.move.vx * dt;
+
+        if (this.stateTimer > this.walkDuration) {
+          this.state = "pounce";
+          this.stateTimer = 0;
+          this.setAction(ACTIONS.pounce);
+        }
+
+        break;
+
+      case "pounce":
+        const lastFrame = this.action.frames.length - 1;
+
+        if (this.frameIndex === lastFrame) {
+          this.state = "rest";
+          this.stateTimer = 0;
+          this.restDuration = this.randomRestDuration();
+        }
+
+        break;
+
+      case "rest":
+        // 趴着不动
+        if (this.stateTimer > this.restDuration) {
+          this.state = "walk";
+          this.stateTimer = 0;
+          this.walkDuration = this.randomWalkDuration();
+          this.setAction(ACTIONS.walk);
+        }
+        break;
+    }
+
+    // 出屏重生（只在 walk 状态下）
+    if (this.state === "walk" && this.x < -this.width - 50) {
+      this.x = window.innerWidth + 50;
+      this.y = this.randomY();
+    }
+
+    this.applyPosition();
+  }
+
+  applyPosition() {
+    this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+  }
+}
 
     /********************
      * 4) 启动
