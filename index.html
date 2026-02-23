@@ -91,25 +91,21 @@ class Cat {
     this.walkDuration = this.randomWalkDuration();
     this.restDuration = 0;
 
-    this.setAction(ACTIONS.walk);
-    this.applyPosition();
-
     this.breathPhase = 0;
 
     this.mouseX = 0;
     this.mouseY = 0;
     this.isMouseNear = false;
+
+    this.setAction(ACTIONS.walk);
+    this.applyPosition();
   }
 
   randomY() {
     const h = window.innerHeight;
-
-    // 避开底部 120px（模拟避开 Dock / 任务栏）
     const bottomSafe = 120;
-
     const min = h * 0.2;
-    const max = h - bottomSafe;
-
+    const max = Math.max(min + 10, h - bottomSafe); // 防止窗口太小 max < min
     return min + Math.random() * (max - min);
   }
 
@@ -119,14 +115,8 @@ class Cat {
 
   randomRestDuration() {
     const r = Math.random();
-
-    if (r < 0.3) {
-      // 30% 概率：长睡
-      return 4000 + Math.random() * 4000; // 4~8 秒
-    }
-
-    // 普通睡
-    return 1500 + Math.random() * 2500;
+    if (r < 0.3) return 4000 + Math.random() * 4000; // 4~8 秒
+    return 1500 + Math.random() * 2500;              // 1.5~4 秒
   }
 
   setAction(action) {
@@ -137,6 +127,7 @@ class Cat {
   }
 
   update(dt) {
+    // 1) 帧动画
     const frameDuration = 1 / (this.action.fps || 8);
     this.frameTimer += dt;
 
@@ -145,37 +136,29 @@ class Cat {
       this.frameIndex++;
 
       if (this.frameIndex >= this.action.frames.length) {
-        if (this.action.loop) {
-          this.frameIndex = 0;
-        } else {
-          this.frameIndex = this.action.frames.length - 1;
-        }
+        this.frameIndex = this.action.loop ? 0 : (this.action.frames.length - 1);
       }
 
       this.el.src = this.action.frames[this.frameIndex];
     }
 
+    // 2) 计时
     this.stateTimer += dt * 1000;
 
-    // 鼠标距离检测
-    const dx = this.mouseX - (this.x + 90); // 90 ≈ 猫中心
+    // 3) 鼠标距离检测
+    const dx = this.mouseX - (this.x + 90);
     const dy = this.mouseY - (this.y + 60);
-    const dist = Math.sqrt(dx*dx + dy*dy);
-
+    const dist = Math.hypot(dx, dy);
     this.isMouseNear = dist < 120;
 
-    // 鼠标逗猫逻辑
+    // 4) 鼠标逗猫逻辑
     if (this.isMouseNear) {
       if (this.state === "rest") {
-        // 被吵醒
         this.state = "walk";
         this.stateTimer = 0;
         this.walkDuration = this.randomWalkDuration();
         this.setAction(ACTIONS.walk);
-      }
-
-      if (this.state === "walk") {
-        // 偶尔被逗扑一下
+      } else if (this.state === "walk") {
         if (Math.random() < 0.02) {
           this.state = "pounce";
           this.stateTimer = 0;
@@ -184,32 +167,30 @@ class Cat {
       }
     }
 
+    // 5) 状态机
     switch (this.state) {
-
       case "walk":
-        this.x += this.action.move.vx * dt;
+        // 防御：避免 this.action.move 为 null 时崩
+        if (this.action.move) this.x += this.action.move.vx * dt;
 
         if (this.stateTimer > this.walkDuration) {
           this.state = "pounce";
           this.stateTimer = 0;
           this.setAction(ACTIONS.pounce);
         }
-
         break;
 
-      case "pounce":
+      case "pounce": {
         const lastFrame = this.action.frames.length - 1;
-
         if (this.frameIndex === lastFrame) {
           this.state = "rest";
           this.stateTimer = 0;
           this.restDuration = this.randomRestDuration();
         }
-
         break;
+      }
 
       case "rest":
-        // 趴着不动
         if (this.stateTimer > this.restDuration) {
           this.state = "walk";
           this.stateTimer = 0;
@@ -219,28 +200,27 @@ class Cat {
         break;
     }
 
-    // 出屏重生（只在 walk 状态下）
+    // 6) 出屏重生
     if (this.state === "walk" && this.x < -this.width - 50) {
       this.x = window.innerWidth + 50;
       this.y = this.randomY();
     }
 
-    this.applyPosition();
-
-    // 呼吸效果（仅 rest 状态）
-    if (this.state === "rest") {
-      this.breathPhase += dt * 2; // 呼吸速度
-      const scaleY = 1 + Math.sin(this.breathPhase) * 0.015;
-      this.el.style.transform =
-        `translate(${this.x}px, ${this.y}px) scaleY(${scaleY})`;
-    } else {
-      this.el.style.transform =
-        `translate(${this.x}px, ${this.y}px)`;
-    }
+    // 7) 应用位置 + 呼吸（这里统一做 transform，避免互相覆盖）
+    this.applyPosition(dt);
   }
 
-  applyPosition() {
-    this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+  applyPosition(dt = 0) {
+    let extra = "";
+
+    // 呼吸（仅 rest）
+    if (this.state === "rest") {
+      this.breathPhase += dt * 2;
+      const scaleY = 1 + Math.sin(this.breathPhase) * 0.015;
+      extra = ` scaleY(${scaleY})`;
+    }
+
+    this.el.style.transform = `translate(${this.x}px, ${this.y}px)${extra}`;
   }
 }
 
