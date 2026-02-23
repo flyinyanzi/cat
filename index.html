@@ -1,77 +1,63 @@
-<!doctype html>
-<html lang="zh">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Desktop Cat</title>
-  <style>
-    html,body{height:100%;margin:0;background:#fff;overflow:hidden;}
-    /* 固定一个“画布盒子”，避免换帧时尺寸变化导致抖动 */
-    #catBox{
-      position:fixed;
-      left:24px;
-      bottom:24px;
-      width:220px;          /* 你可以改大改小 */
-      height:220px;
-      pointer-events:none;  /* 不挡你点网页 */
-      overflow:visible;
-    }
-    /* 关键：底部对齐 + 居中 */
-    #cat{
-      position:absolute;
-      left:50%;
-      bottom:0;
-      transform:translateX(-50%);
-      width:220px;
-      height:auto;
-      user-select:none;
-      -webkit-user-drag:none;
-      image-rendering:auto;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Desktop Cat</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  #cat {
+    position: fixed;
+    width: 120px;
+    pointer-events: none;
+  }
+</style>
 </head>
 <body>
-  <div id="catBox"><img id="cat" alt="cat"/></div>
 
-  <script>
-    // 1) 帧图片
-    const frames = ["walk1.png","walk2.png","walk3.png","walk4.png"];
+<img id="cat" src="walk1.png">
 
-    // 2) 预加载（避免切帧闪烁）
-    frames.forEach(src => { const i = new Image(); i.src = src; });
+<script>
+const cat = document.getElementById("cat");
 
-    const cat = document.getElementById("cat");
-    const catBox = document.getElementById("catBox");
+const frames = ["walk1.png","walk2.png","walk3.png","walk4.png"];
+let frameIndex = 0;
 
-    // 3) 设置初始帧
-    let fi = 0;
-    cat.src = frames[0];
+let x = -120;
+let y = Math.random() * (window.innerHeight - 150);
 
-    // 4) 切帧速度（越小越快）
-    const frameMs = 120;
-    setInterval(() => {
-      fi = (fi + 1) % frames.length;
-      cat.src = frames[fi];
-    }, frameMs);
+let speed = 2;
+let floatPhase = 0;
 
-    // 5) 随机走动（你最开始要的“在桌面上活动”）
-    let x = 24, y = 24;         // 以 left/bottom 表示位置
-    let vx = 1;                 // 水平速度
-    const speed = 1.2;          // 越大走得越快
-    function tick(){
-      const maxX = window.innerWidth - catBox.offsetWidth - 24;
-      x += vx * speed;
+function animate() {
 
-      if (x <= 24){ x = 24; vx = 1; }
-      if (x >= maxX){ x = maxX; vx = -1; }
+  // 切换帧
+  frameIndex = (frameIndex + 1) % frames.length;
+  cat.src = frames[frameIndex];
 
-      catBox.style.left = x + "px";
-      // 小猫始终贴底：bottom 固定
-      // catBox.style.bottom = y + "px";
+  // 向右移动
+  x += speed;
 
-      requestAnimationFrame(tick);
-    }
-    tick();
-  </script>
+  // 轻微上下浮动
+  floatPhase += 0.1;
+  let floatOffset = Math.sin(floatPhase) * 4;
+
+  cat.style.left = x + "px";
+  cat.style.top = (y + floatOffset) + "px";
+
+  // 走出屏幕后重置
+  if (x > window.innerWidth) {
+    x = -120;
+    y = Math.random() * (window.innerHeight - 150);
+  }
+}
+
+setInterval(animate, 120);
+</script>
+
 </body>
 </html>
