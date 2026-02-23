@@ -1,63 +1,201 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>Desktop Cat</title>
-<style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: transparent;
-  }
-
-  #cat {
-    position: fixed;
-    width: 120px;
-    pointer-events: none;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Desktop Cat (Web)</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+    #stage { position: fixed; inset: 0; pointer-events: none; }
+    #cat {
+      position: absolute;
+      width: 180px;           /* 可调：猫显示大小 */
+      height: auto;
+      image-rendering: auto;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+      will-change: transform, left, top;
+    }
+  </style>
 </head>
 <body>
+  <div id="stage">
+    <img id="cat" alt="cat" />
+  </div>
 
-<img id="cat" src="walk1.png">
+  <script>
+    /********************
+     * 1) 动作定义（后续扩展都在这里加）
+     ********************/
+    const ACTIONS = {
+      walk: {
+        key: "walk",
+        frames: ["walk1.png", "walk2.png", "walk3.png", "walk4.png"],
+        fps: 10,                 // 走路帧率（越高越“快腿”）
+        loop: true,
+        move: { vx: -120, vy: 0 },// px/s：负数=从右往左走（符合你这组图）
+        weight: 1.0              // 随机选择权重（以后多动作时用）
+      },
 
-<script>
-const cat = document.getElementById("cat");
+      // 以后你加动作就照这个格式：
+      // sleep: { frames:["sleep1.png","sleep2.png","sleep3.png","sleep4.png"], fps:6, loop:true, move:null, weight:0.7 },
+      // yawn:  { frames:["yawn1.png","yawn2.png","yawn3.png","yawn4.png"], fps:8, loop:false, duration:1200, move:null, weight:0.3 },
+    };
 
-const frames = ["walk1.png","walk2.png","walk3.png","walk4.png"];
-let frameIndex = 0;
+    /********************
+     * 2) 简单工具：预加载
+     ********************/
+    function preloadImages(urls) {
+      return Promise.all(urls.map(u => new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(u);
+        img.onerror = () => rej(new Error("Failed to load: " + u));
+        img.src = u;
+      })));
+    }
 
-let x = -120;
-let y = Math.random() * (window.innerHeight - 150);
+    function weightedPick(actionsMap) {
+      const arr = Object.values(actionsMap);
+      const total = arr.reduce((s, a) => s + (a.weight ?? 1), 0);
+      let r = Math.random() * total;
+      for (const a of arr) {
+        r -= (a.weight ?? 1);
+        if (r <= 0) return a;
+      }
+      return arr[arr.length - 1];
+    }
 
-let speed = 2;
-let floatPhase = 0;
+    /********************
+     * 3) 猫实体（动作切换 + 帧动画 + 位移）
+     ********************/
+    class Cat {
+      constructor(el) {
+        this.el = el;
 
-function animate() {
+        // 位置：从右侧外面进场
+        this.x = window.innerWidth + 50;
+        this.y = this.randomY();
 
-  // 切换帧
-  frameIndex = (frameIndex + 1) % frames.length;
-  cat.src = frames[frameIndex];
+        // 动作状态
+        this.action = null;
+        this.frameIndex = 0;
+        this.frameTimer = 0;
 
-  // 向左移动
-  x -= speed;
+        // 用于非 loop 动作
+        this.actionTimer = 0;
 
-  // 轻微上下浮动
-  floatPhase += 0.1;
-  let floatOffset = Math.sin(floatPhase) * 4;
+        this.setAction(ACTIONS.walk);
+        this.applyPosition();
+      }
 
-  cat.style.left = x + "px";
-  cat.style.top = (y + floatOffset) + "px";
+      randomY() {
+        // 让它“上面也能走”，随机在 15%~85% 屏幕高度之间
+        const h = window.innerHeight;
+        const min = h * 0.15;
+        const max = h * 0.85;
+        return min + Math.random() * (max - min);
+      }
 
-  // 走出屏幕后重置
-  if (x > window.innerWidth) {
-    x = -120;
-    y = Math.random() * (window.innerHeight - 150);
-  }
-}
+      setAction(action) {
+        this.action = action;
+        this.frameIndex = 0;
+        this.frameTimer = 0;
+        this.actionTimer = 0;
+        this.el.src = action.frames[0];
+      }
 
-setInterval(animate, 120);
-</script>
+      update(dt) {
+        // dt: 秒
+        // 1) 帧动画
+        const frameDuration = 1 / (this.action.fps || 8);
+        this.frameTimer += dt;
+        while (this.frameTimer >= frameDuration) {
+          this.frameTimer -= frameDuration;
+          this.frameIndex++;
 
+          if (this.frameIndex >= this.action.frames.length) {
+            if (this.action.loop) {
+              this.frameIndex = 0;
+            } else {
+              // 非循环动作：停在最后一帧
+              this.frameIndex = this.action.frames.length - 1;
+            }
+          }
+          this.el.src = this.action.frames[this.frameIndex];
+        }
+
+        // 2) 位移：只有 move 的动作才移动（walk）
+        if (this.action.move) {
+          this.x += this.action.move.vx * dt;
+          this.y += (this.action.move.vy || 0) * dt;
+        }
+
+        // 3) 出屏幕后重新从右侧进入（只往前走，不后退）
+        const offLeft = this.x < -250; // 250 取决于猫宽度，可调
+        if (offLeft) {
+          this.x = window.innerWidth + 50;
+          this.y = this.randomY();
+        }
+
+        // 4) 动作切换框架（先保留，当前只有 walk 就不会真的换）
+        //    以后你加了其他动作（sleep/yawn/play等），这里就会生效
+        this.actionTimer += dt * 1000; // ms
+        const shouldSwitch =
+          Object.keys(ACTIONS).length > 1 &&                // 有多动作时才切
+          (this.action.loop ? this.actionTimer > 3500 :     // loop 动作跑一会儿再考虑切
+                             this.actionTimer > (this.action.duration || 1200));
+
+        if (shouldSwitch) {
+          this.actionTimer = 0;
+
+          // 规则：如果正在走路，可小概率切到别的；如果在别的动作结束，再切回走路
+          const next = weightedPick(ACTIONS);
+          this.setAction(next);
+
+          // 若切到“静止动作”，可以让它停住（move:null），并保持当前位置
+          // 若切回 walk，会继续从当前位置往左走
+        }
+
+        this.applyPosition();
+      }
+
+      applyPosition() {
+        // 用 transform 保持性能
+        this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+      }
+    }
+
+    /********************
+     * 4) 启动
+     ********************/
+    (async function main() {
+      const allFrames = Object.values(ACTIONS).flatMap(a => a.frames);
+      try {
+        await preloadImages(allFrames);
+      } catch (e) {
+        console.error(e);
+        alert("图片加载失败：\n" + e.message + "\n\n请确认 walk1.png~walk4.png 与 HTML 同目录。");
+        return;
+      }
+
+      const catEl = document.getElementById("cat");
+      const cat = new Cat(catEl);
+
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.min(0.05, (now - last) / 1000); // 防卡顿爆走
+        last = now;
+        cat.update(dt);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      window.addEventListener("resize", () => {
+        // 不强制重置位置，只确保不会 NaN
+        cat.x = Math.min(cat.x, window.innerWidth + 50);
+      });
+    })();
+  </script>
 </body>
 </html>
