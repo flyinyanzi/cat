@@ -39,8 +39,8 @@ function animate() {
   frameIndex = (frameIndex + 1) % frames.length;
   cat.src = frames[frameIndex];
 
-  // 向右移动
-  x += speed;
+  // 向左移动
+  x -= speed;
 
   // 轻微上下浮动
   floatPhase += 0.1;
