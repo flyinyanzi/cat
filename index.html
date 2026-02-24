@@ -91,14 +91,20 @@ class Cat {
     this.walkDuration = this.randomWalkDuration();
     this.restDuration = 0;
 
+    // 呼吸感
     this.breathPhase = 0;
 
+    // 逗猫
     this.mouseX = 0;
     this.mouseY = 0;
     this.isMouseNear = false;
 
     this.setAction(ACTIONS.walk);
     this.applyPosition();
+
+    // 长时间挂机
+    this.idleTime = 0;
+    this.isInCornerMode = false;
   }
 
   randomY() {
@@ -149,34 +155,57 @@ class Cat {
     const dx = this.mouseX - (this.x + 90);
     const dy = this.mouseY - (this.y + 60);
     const dist = Math.hypot(dx, dy);
-    this.isMouseNear = dist < 120;
+    this.isMouseNear = dist < 180;
 
     // 4) 鼠标逗猫逻辑
-    if (this.isMouseNear) {
+    if (this.isMouseNear && dx < 0) {
       if (this.state === "rest") {
         this.state = "walk";
         this.stateTimer = 0;
         this.walkDuration = this.randomWalkDuration();
         this.setAction(ACTIONS.walk);
       } else if (this.state === "walk") {
-        if (Math.random() < 0.02) {
+        if (Math.random() < 0.08) {
           this.state = "pounce";
           this.stateTimer = 0;
           this.setAction(ACTIONS.pounce);
         }
       }
     }
+    
+    // 长时间挂机
+    if (this.isMouseNear) {
+      this.idleTime = 0;
+      this.isInCornerMode = false;
+    } else {
+      this.idleTime += dt * 1000;
+    }
 
     // 5) 状态机
     switch (this.state) {
       case "walk":
-        // 防御：避免 this.action.move 为 null 时崩
-        if (this.action.move) this.x += this.action.move.vx * dt;
+        // 如果长时间挂机，则到角落睡觉
+        if (this.isInCornerMode) {
+          const targetX = window.innerWidth - this.width - 20;
+          const targetY = window.innerHeight - 120;
 
-        if (this.stateTimer > this.walkDuration) {
-          this.state = "pounce";
-          this.stateTimer = 0;
-          this.setAction(ACTIONS.pounce);
+          this.x += (targetX - this.x) * 0.02;
+          this.y += (targetY - this.y) * 0.02;
+
+          if (Math.abs(targetX - this.x) < 2) {
+            this.state = "rest";
+            this.stateTimer = 0;
+            this.restDuration = 999999; // 无限睡
+          }
+        } else {
+            // 防御：避免 this.action.move 为 null 时崩
+            if (this.action.move) this.x += this.action.move.vx * dt;
+
+            if (this.stateTimer > this.walkDuration) {
+              this.state = "pounce";
+              this.stateTimer = 0;
+              this.setAction(ACTIONS.pounce);
+            }
         }
         break;
 
@@ -200,6 +229,13 @@ class Cat {
         break;
     }
 
+    // 长时间无互动 → 角落睡觉
+    if (this.idleTime > 60000 && !this.isInCornerMode) {
+      this.isInCornerMode = true;
+      this.state = "walk";
+      this.setAction(ACTIONS.walk);
+    }
+
     // 6) 出屏重生
     if (this.state === "walk" && this.x < -this.width - 50) {
       this.x = window.innerWidth + 50;
@@ -216,7 +252,7 @@ class Cat {
     // 呼吸（仅 rest）
     if (this.state === "rest") {
       this.breathPhase += dt * 2;
-      const scaleY = 1 + Math.sin(this.breathPhase) * 0.015;
+      const scaleY = 1 + Math.sin(this.breathPhase) * 0.02;
       extra = ` scaleY(${scaleY})`;
     }
 
@@ -259,7 +295,31 @@ class Cat {
         cat.mouseX = e.clientX;
         cat.mouseY = e.clientY;
       });
+
+      // 手指触屏逗猫监听
+      window.addEventListener("touchmove", e => {
+        const touch = e.touches[0];
+        cat.mouseX = touch.clientX;
+        cat.mouseY = touch.clientY;
+      });
     })();
+
+    /********************
+     * 番茄钟 + 猫状态联动
+     ********************/
+    let workMode = true;
+    let timer = 25 * 60;
+
+    setInterval(() => {
+      timer--;
+      if (timer <= 0) {
+        workMode = !workMode;
+        timer = workMode ? 25*60 : 5*60;
+
+        cat.state = "pounce";
+        cat.setAction(ACTIONS.pounce);
+      }
+    }, 1000);
   </script>
 </body>
 </html>
