@@ -4,16 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Desktop Cat (Web)</title>
+  <div id="panel">
+    <input id="minuteInput" type="number" min="1" max="99" placeholder="分钟" />
+    <button id="startBtn">开始</button>
+    <button id="resetBtn">重置</button>
+    <div id="timer">00:00</div>
+  </div>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
     #stage { position: fixed; inset: 0; pointer-events: none; }
-    <div id="panel">
-      <input id="minuteInput" type="number" min="1" max="99" placeholder="分钟" />
-      <button id="startBtn">开始</button>
-      <button id="resetBtn">重置</button>
-      <div id="timer">00:00</div>
-    </div>
-    
+
     #cat {
       position: absolute;
       width: 180px;           /* 可调：猫显示大小 */
