@@ -145,8 +145,8 @@ class Cat {
     this.interactCooldown = 0;
 
     // 长时间挂机
-    this.idleTime = 0;
-    this.isInCornerMode = false;
+    // this.idleTime = 0;
+    // this.isInCornerMode = false;
   }
 
   randomY() {
@@ -220,30 +220,30 @@ class Cat {
     }
     
     // 长时间挂机
-    if (this.isMouseNear) {
-      this.idleTime = 0;
-      this.isInCornerMode = false;
-    } else {
-      this.idleTime += dt * 1000;
-    }
+    //if (this.isMouseNear) {
+    //  this.idleTime = 0;
+    //  this.isInCornerMode = false;
+    //} else {
+    //  this.idleTime += dt * 1000;
+    //}
 
     // 5) 状态机
     switch (this.state) {
       case "walk":
         // 如果长时间挂机，则到角落睡觉
-        if (this.isInCornerMode) {
-          const targetX = window.innerWidth - this.width - 20;
-          const targetY = window.innerHeight - 120;
+        //if (this.isInCornerMode) {
+        //  const targetX = window.innerWidth - this.width - 20;
+        //  const targetY = window.innerHeight - 120;
 
-          this.x += (targetX - this.x) * 0.02;
-          this.y += (targetY - this.y) * 0.02;
+        //  this.x += (targetX - this.x) * 0.02;
+        //  this.y += (targetY - this.y) * 0.02;
 
-          if (Math.abs(targetX - this.x) < 2) {
-            this.state = "rest";
-            this.stateTimer = 0;
-            this.restDuration = 999999; // 无限睡
-          }
-        } else {
+        //  if (Math.abs(targetX - this.x) < 2) {
+        //    this.state = "rest";
+        //    this.stateTimer = 0;
+        //    this.restDuration = 999999; // 无限睡
+        //  }
+        //} else {
             // 防御：避免 this.action.move 为 null 时崩
             if (this.action.move) this.x += this.action.move.vx * dt;
 
@@ -252,7 +252,7 @@ class Cat {
               this.stateTimer = 0;
               this.setAction(ACTIONS.pounce);
             }
-        }
+        //}
         break;
 
       case "pounce": {
@@ -276,11 +276,11 @@ class Cat {
     }
 
     // 长时间无互动 → 角落睡觉
-    if (this.idleTime > 60000 && !this.isInCornerMode) {
-      this.isInCornerMode = true;
-      this.state = "walk";
-      this.setAction(ACTIONS.walk);
-    }
+    // if (this.idleTime > 60000 && !this.isInCornerMode) {
+    //  this.isInCornerMode = true;
+    //  this.state = "walk";
+    //  this.setAction(ACTIONS.walk);
+    // }
 
     // 6) 出屏重生
     if (this.state === "walk" && this.x < -this.width - 50) {
