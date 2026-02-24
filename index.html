@@ -7,6 +7,13 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
     #stage { position: fixed; inset: 0; pointer-events: none; }
+    <div id="panel">
+      <input id="minuteInput" type="number" min="1" max="99" placeholder="分钟" />
+      <button id="startBtn">开始</button>
+      <button id="resetBtn">重置</button>
+      <div id="timer">00:00</div>
+    </div>
+    
     #cat {
       position: absolute;
       width: 180px;           /* 可调：猫显示大小 */
@@ -17,12 +24,45 @@
       pointer-events: none;
       will-change: transform, left, top;
     }
+
+    #panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: sans-serif;
+    }
+
+    #panel input {
+      width: 80px;
+      padding: 4px;
+    }
+
+    #panel button {
+      padding: 4px;
+      cursor: pointer;
+    }
+
+    #timer {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      font-size: 22px;
+      font-family: monospace;
+      color: #333;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="stage">
     <img id="cat" alt="cat" />
   </div>
+
+  // 可视化倒计时钟
+  <div id="timer"></div>
 
   <script>
     /********************
@@ -102,6 +142,9 @@ class Cat {
     this.setAction(ACTIONS.walk);
     this.applyPosition();
 
+    // 互动冷却
+    this.interactCooldown = 0;
+
     // 长时间挂机
     this.idleTime = 0;
     this.isInCornerMode = false;
@@ -133,6 +176,10 @@ class Cat {
   }
 
   update(dt) {
+    if (this.interactCooldown > 0) {
+      this.interactCooldown -= dt * 1000;
+    }
+    
     // 1) 帧动画
     const frameDuration = 1 / (this.action.fps || 8);
     this.frameTimer += dt;
@@ -155,21 +202,21 @@ class Cat {
     const dx = this.mouseX - (this.x + 90);
     const dy = this.mouseY - (this.y + 60);
     const dist = Math.hypot(dx, dy);
-    this.isMouseNear = dist < 180;
+    this.isMouseNear = dist < 120;
 
     // 4) 鼠标逗猫逻辑
-    if (this.isMouseNear && dx < 0) {
-      if (this.state === "rest") {
-        this.state = "walk";
+    if (
+      this.isMouseNear &&
+      dx < 0 &&
+      this.state === "walk" &&
+      this.interactCooldown <= 0
+    ) {
+      if (Math.random() < 0.15) {
+        this.state = "pounce";
         this.stateTimer = 0;
-        this.walkDuration = this.randomWalkDuration();
-        this.setAction(ACTIONS.walk);
-      } else if (this.state === "walk") {
-        if (Math.random() < 0.08) {
-          this.state = "pounce";
-          this.stateTimer = 0;
-          this.setAction(ACTIONS.pounce);
-        }
+        this.setAction(ACTIONS.pounce);
+
+        this.interactCooldown = 3000; // 3秒冷却
       }
     }
     
@@ -276,6 +323,72 @@ class Cat {
       const catEl = document.getElementById("cat");
       const cat = new Cat(catEl);
 
+      /********************
+       * 可控计时器
+       ********************/
+      let timer = 0;
+      let intervalId = null;
+      let isRunning = false;
+
+      const minuteInput = document.getElementById("minuteInput");
+      const startBtn = document.getElementById("startBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const timerEl = document.getElementById("timer");
+
+      updateDisplay();
+
+      // 开始按钮
+      startBtn.addEventListener("click", () => {
+        if (isRunning) return;
+
+        const minutes = parseInt(minuteInput.value);
+
+        if (isNaN(minutes) || minutes <= 0) {
+          alert("请输入有效分钟数");
+          return;
+        }
+
+        timer = minutes * 60;
+        isRunning = true;
+
+        updateDisplay();
+
+        intervalId = setInterval(() => {
+          timer--;
+
+          if (timer <= 0) {
+            clearInterval(intervalId);
+            isRunning = false;
+            timer = 0;
+            updateDisplay();
+
+            // 时间到 → 猫提醒
+            cat.state = "pounce";
+            cat.stateTimer = 0;
+            cat.setAction(ACTIONS.pounce);
+
+            return;
+          }
+          updateDisplay();
+        }, 1000);
+      });
+
+      // 重置按钮
+      resetBtn.addEventListener("click", () => {
+        clearInterval(intervalId);
+        isRunning = false;
+        timer = 0;
+        updateDisplay();
+      });
+
+      // 显示函数
+      function updateDisplay() {
+        const min = Math.floor(timer / 60).toString().padStart(2, "0");
+        const sec = (timer % 60).toString().padStart(2, "0");
+
+        timerEl.textContent = `${min}:${sec}`;
+      }
+
       let last = performance.now();
       function tick(now) {
         const dt = Math.min(0.05, (now - last) / 1000); // 防卡顿爆走
@@ -302,24 +415,9 @@ class Cat {
         cat.mouseX = touch.clientX;
         cat.mouseY = touch.clientY;
       });
+      
     })();
 
-    /********************
-     * 番茄钟 + 猫状态联动
-     ********************/
-    let workMode = true;
-    let timer = 25 * 60;
-
-    setInterval(() => {
-      timer--;
-      if (timer <= 0) {
-        workMode = !workMode;
-        timer = workMode ? 25*60 : 5*60;
-
-        cat.state = "pounce";
-        cat.setAction(ACTIONS.pounce);
-      }
-    }, 1000);
   </script>
 </body>
 </html>
