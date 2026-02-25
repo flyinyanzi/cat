@@ -150,6 +150,7 @@ class Cat {
 
     // 互动冷却
     this.interactCooldown = 0;
+    this.nextPounceAllowedTime = 0;
 
     // 长时间挂机
     this.lastInteractionTime = Date.now();
@@ -246,14 +247,24 @@ class Cat {
         if (this.action.move) this.x += this.action.move.vx * dt;
 
         if (this.stateTimer > this.walkDuration) {
-          // isRunning：计时器状态下，pounce的概率降低
-          const sleepChance = this.isWorkMode ? 0.4 : 1.0;
+          const now = Date.now();
+          if (now >= this.nextPounceAllowedTime) {
+            // 倒计时启动，工作模式下pounce概率降低
+            const sleepChance = this.isWorkMode ? 0.4 : 1.0;
 
-          if (Math.random() < sleepChance) {
-            this.state = "pounce";
-            this.stateTimer = 0;
-            this.setAction(ACTIONS.pounce);
+            if (Math.random() < sleepChance) {
+              this.state = "pounce";
+              this.stateTimer = 0;
+              this.setAction(ACTIONS.pounce);
+
+              // 关键：设置冷却
+              this.nextPounceAllowedTime = now + 5000; // 5秒内不再扑
+            } else {
+              this.walkDuration = this.randomWalkDuration();
+              this.stateTimer = 0;
+            }
           } else {
+            // 冷却中，继续走
             this.walkDuration = this.randomWalkDuration();
             this.stateTimer = 0;
           }
