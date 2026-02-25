@@ -155,7 +155,7 @@ class Cat {
     this.lastInteractionTime = Date.now();
 
     // 工作模式判断
-    this.isRunning = false;
+    this.isWorkMode = false;
   }
 
   randomY() {
@@ -247,7 +247,7 @@ class Cat {
 
         if (this.stateTimer > this.walkDuration) {
           // isRunning：计时器状态下，pounce的概率降低
-          const sleepChance = isRunning ? 0.4 : 1.0;
+          const sleepChance = isWorkMode ? 0.4 : 1.0;
 
           if (Math.random() < sleepChance) {
             this.state = "pounce";
@@ -358,8 +358,8 @@ class Cat {
 
         timer = minutes * 60;
         isRunning = true;
-
         updateDisplay();
+        cat.isWorkMode = true;
 
         intervalId = setInterval(() => {
           timer--;
@@ -367,6 +367,7 @@ class Cat {
           if (timer <= 0) {
             clearInterval(intervalId);
             isRunning = false;
+            cat.isWorkMode = false;
             timer = 0;
             updateDisplay();
 
@@ -387,6 +388,7 @@ class Cat {
         isRunning = false;
         timer = 0;
         updateDisplay();
+        cat.isWorkMode = false;
       });
 
       // 显示函数
