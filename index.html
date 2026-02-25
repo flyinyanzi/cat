@@ -4,12 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Desktop Cat (Web)</title>
-  <div id="panel">
-    <input id="minuteInput" type="number" min="1" max="99" placeholder="分钟" />
-    <button id="startBtn">开始</button>
-    <button id="resetBtn">重置</button>
-    <div id="timer">00:00</div>
-  </div>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
     #stage { position: fixed; inset: 0; pointer-events: none; }
@@ -60,8 +54,13 @@
   <div id="stage">
     <img id="cat" alt="cat" />
   </div>
-  
-  <div id="timer"></div>
+
+  <div id="panel">
+    <input id="minuteInput" type="number" min="1" max="99" placeholder="分钟" />
+    <button id="startBtn">开始</button>
+    <button id="resetBtn">重置</button>
+    <div id="timer">00:00</div>
+  </div>
 
   <script>
     /********************
@@ -153,8 +152,7 @@ class Cat {
     this.interactCooldown = 0;
 
     // 长时间挂机
-    // this.idleTime = 0;
-    // this.isInCornerMode = false;
+    this.lastInteractionTime = Date.now();
   }
 
   randomY() {
@@ -185,6 +183,17 @@ class Cat {
   update(dt) {
     if (this.interactCooldown > 0) {
       this.interactCooldown -= dt * 1000;
+    }
+
+    // ===== 长时间待机（最高优先级） =====
+    if (document.visibilityState === "visible") {
+      const idleDuration = Date.now() - this.lastInteractionTime;
+
+      if (idleDuration > 60000 && this.state !== "sleep") {
+        this.state = "sleep";
+        this.stateTimer = 0;
+        this.setAction(ACTIONS.sleep);
+      }
     }
     
     // 1) 帧动画
@@ -226,42 +235,28 @@ class Cat {
         this.interactCooldown = 3000; // 3秒冷却
       }
     }
-    
-    // 长时间挂机
-    //if (this.isMouseNear) {
-    //  this.idleTime = 0;
-    //  this.isInCornerMode = false;
-    //} else {
-    //  this.idleTime += dt * 1000;
-    //}
 
     // 5) 状态机
     switch (this.state) {
-      case "walk":
-        // 如果长时间挂机，则到角落睡觉
-        //if (this.isInCornerMode) {
-        //  const targetX = window.innerWidth - this.width - 20;
-        //  const targetY = window.innerHeight - 120;
+      case "walk": {
+        // 防御：避免 this.action.move 为 null 时崩
+        if (this.action.move) this.x += this.action.move.vx * dt;
 
-        //  this.x += (targetX - this.x) * 0.02;
-        //  this.y += (targetY - this.y) * 0.02;
+        if (this.stateTimer > this.walkDuration) {
+          // isRunning：计时器状态下，pounce的概率降低
+          const sleepChance = isRunning ? 0.4 : 1.0;
 
-        //  if (Math.abs(targetX - this.x) < 2) {
-        //    this.state = "rest";
-        //    this.stateTimer = 0;
-        //    this.restDuration = 999999; // 无限睡
-        //  }
-        //} else {
-            // 防御：避免 this.action.move 为 null 时崩
-            if (this.action.move) this.x += this.action.move.vx * dt;
-
-            if (this.stateTimer > this.walkDuration) {
-              this.state = "pounce";
-              this.stateTimer = 0;
-              this.setAction(ACTIONS.pounce);
-            }
-        //}
+          if (Math.random() < sleepChance) {
+            this.state = "pounce";
+            this.stateTimer = 0;
+            this.setAction(ACTIONS.pounce);
+          } else {
+            this.walkDuration = this.randomWalkDuration();
+            this.stateTimer = 0;
+          }
+        }
         break;
+      }
 
       case "pounce": {
         const lastFrame = this.action.frames.length - 1;
@@ -273,7 +268,7 @@ class Cat {
         break;
       }
 
-      case "rest":
+      case "rest": {
         if (this.stateTimer > this.restDuration) {
           this.state = "walk";
           this.stateTimer = 0;
@@ -281,6 +276,7 @@ class Cat {
           this.setAction(ACTIONS.walk);
         }
         break;
+      }
 
       case "sleep": {
         const lastFrame = this.action.frames.length - 1;
@@ -289,15 +285,8 @@ class Cat {
           this.frameIndex = lastFrame;
         }
         break;
-}
+      }
     }
-
-    // 长时间无互动 → 角落睡觉
-    // if (this.idleTime > 60000 && !this.isInCornerMode) {
-    //  this.isInCornerMode = true;
-    //  this.state = "walk";
-    //  this.setAction(ACTIONS.walk);
-    // }
 
     // 6) 出屏重生
     if (this.state === "walk" && this.x < -this.width - 50) {
@@ -313,7 +302,7 @@ class Cat {
     let extra = "";
 
     // 呼吸
-    if (this.state === "rest") {
+    if (this.state === "rest" || this.state === "sleep") {
       this.breathPhase += dt * 2;
       const scaleY = 1 + Math.sin(this.breathPhase) * 0.025;
       extra = ` scaleY(${scaleY})`;
@@ -423,6 +412,12 @@ class Cat {
       window.addEventListener("mousemove", e => {
         cat.mouseX = e.clientX;
         cat.mouseY = e.clientY;
+        cat.lastInteractionTime = Date.now();
+        if (cat.state === "sleep") {
+          cat.state = "walk";
+          cat.stateTimer = 0;
+          cat.setAction(ACTIONS.walk);
+        }
       });
 
       // 手指触屏逗猫监听
@@ -430,6 +425,12 @@ class Cat {
         const touch = e.touches[0];
         cat.mouseX = touch.clientX;
         cat.mouseY = touch.clientY;
+        cat.lastInteractionTime = Date.now();
+        if (cat.state === "sleep") {
+          cat.state = "walk";
+          cat.stateTimer = 0;
+          cat.setAction(ACTIONS.walk);
+        }
       });
       
     })();
