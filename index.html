@@ -247,7 +247,7 @@ class Cat {
 
         if (this.stateTimer > this.walkDuration) {
           // isRunning：计时器状态下，pounce的概率降低
-          const sleepChance = isWorkMode ? 0.4 : 1.0;
+          const sleepChance = this.isWorkMode ? 0.4 : 1.0;
 
           if (Math.random() < sleepChance) {
             this.state = "pounce";
