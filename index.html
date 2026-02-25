@@ -82,6 +82,14 @@
         fps: 12,
         loop: false,
         move: null
+      },
+
+      sleep: {
+        key: "sleep",
+        frames: ["sleep1.png", "sleep2.png", "sleep3.png", "sleep4.png"],
+        fps: 6,
+        loop: false,
+        move: null
       }
     };
 
@@ -273,6 +281,15 @@ class Cat {
           this.setAction(ACTIONS.walk);
         }
         break;
+
+      case "sleep": {
+        const lastFrame = this.action.frames.length - 1;
+        // 播到最后一帧后固定住
+        if (this.frameIndex >= lastFrame) {
+          this.frameIndex = lastFrame;
+        }
+        break;
+}
     }
 
     // 长时间无互动 → 角落睡觉
@@ -295,10 +312,10 @@ class Cat {
   applyPosition(dt = 0) {
     let extra = "";
 
-    // 呼吸（仅 rest）
+    // 呼吸
     if (this.state === "rest") {
       this.breathPhase += dt * 2;
-      const scaleY = 1 + Math.sin(this.breathPhase) * 0.02;
+      const scaleY = 1 + Math.sin(this.breathPhase) * 0.025;
       extra = ` scaleY(${scaleY})`;
     }
 
