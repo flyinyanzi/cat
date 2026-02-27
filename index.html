@@ -206,7 +206,7 @@ class Cat {
 
       if (idleDuration > 60000 && this.state !== "sleep") {
         // 如果已经快出屏，先重生
-        if (this.x < -this.width || this.x > window.innerWidth) {
+        if (this.x < -this.width + 2) {
           this.x = window.innerWidth + 50;
           this.y = this.randomY();
         }
@@ -250,7 +250,7 @@ class Cat {
     ) {
       if (Math.random() < 0.15) {
         this.startPounce();          // ✅ 统一走这里
-        this.interactCooldown = 3000; // 鼠标这条路自己的节流还保留interactCooldown = 3000; // 3秒冷却
+        this.interactCooldown = 3000; // 鼠标这条路自己的节流还保留interactCooldown = 3000，3秒冷却
       }
     }
 
@@ -307,8 +307,8 @@ class Cat {
       }
     }
 
-    // 6) 出屏重生（以“完全不可见”为准）
-    if (this.x < -this.width + 5 || this.x > window.innerWidth - 5) {
+    // 6) 出屏重生（只处理左侧出屏，避免出生就被判出屏）
+    if (this.x < -this.width) {
       this.x = window.innerWidth + 50;
       this.y = this.randomY();
 
