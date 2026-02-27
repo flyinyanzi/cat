@@ -151,6 +151,7 @@ class Cat {
     // 互动冷却
     this.interactCooldown = 0;
     this.nextPounceAllowedTime = 0;
+    this.pounceCooldownUntil = 0; // 所有“扑”的统一冷却
 
     // 长时间挂机
     this.lastInteractionTime = Date.now();
@@ -182,6 +183,17 @@ class Cat {
     this.frameIndex = 0;
     this.frameTimer = 0;
     this.el.src = action.frames[0];
+  }
+
+  startPounce() {
+    const now = Date.now();
+    if (now < this.pounceCooldownUntil) return false;
+
+    this.state = "pounce";
+    this.stateTimer = 0;
+    this.setAction(ACTIONS.pounce);
+    this.pounceCooldownUntil = now + 5000; // 5秒内不允许再次扑
+    return true;
   }
 
   update(dt) {
@@ -232,11 +244,8 @@ class Cat {
       this.interactCooldown <= 0
     ) {
       if (Math.random() < 0.15) {
-        this.state = "pounce";
-        this.stateTimer = 0;
-        this.setAction(ACTIONS.pounce);
-
-        this.interactCooldown = 3000; // 3秒冷却
+        this.startPounce();          // ✅ 统一走这里
+        this.interactCooldown = 3000; // 鼠标这条路自己的节流还保留interactCooldown = 3000; // 3秒冷却
       }
     }
 
@@ -303,9 +312,17 @@ class Cat {
     }
 
     // 6) 出屏重生
-    if (this.state === "walk" && this.x < -this.width - 50) {
+    if (this.x < -this.width - 50) {
       this.x = window.innerWidth + 50;
       this.y = this.randomY();
+
+      // 如果出屏时正好在 sleep/pounce/rest，强制回到 walk（避免在屏幕外触发sleep）
+      if (this.state !== "walk") {
+        this.state = "walk";
+        this.stateTimer = 0;
+        this.walkDuration = this.randomWalkDuration();
+        this.setAction(ACTIONS.walk);
+      }
     }
 
     // 7) 应用位置 + 呼吸（这里统一做 transform，避免互相覆盖）
