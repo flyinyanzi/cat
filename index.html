@@ -150,7 +150,6 @@ class Cat {
 
     // 互动冷却
     this.interactCooldown = 0;
-    this.nextPounceAllowedTime = 0;
     this.pounceCooldownUntil = 0; // 所有“扑”的统一冷却
 
     // 长时间挂机
@@ -262,27 +261,18 @@ class Cat {
         if (this.action.move) this.x += this.action.move.vx * dt;
 
         if (this.stateTimer > this.walkDuration) {
-          const now = Date.now();
-          if (now >= this.nextPounceAllowedTime) {
-            // 倒计时启动，工作模式下pounce概率降低
-            const sleepChance = this.isWorkMode ? 0.4 : 1.0;
+          const sleepChance = this.isWorkMode ? 0.4 : 1.0;
 
-            if (Math.random() < sleepChance) {
-              this.state = "pounce";
-              this.stateTimer = 0;
-              this.setAction(ACTIONS.pounce);
-
-              // 关键：设置冷却
-              this.nextPounceAllowedTime = now + 5000; // 5秒内不再扑
-            } else {
-              this.walkDuration = this.randomWalkDuration();
-              this.stateTimer = 0;
-            }
+          if (Math.random() < sleepChance) {
+            // ✅ 自动触发也走统一冷却
+            this.startPounce();
           } else {
-            // 冷却中，继续走
+            // 不睡：继续走
             this.walkDuration = this.randomWalkDuration();
             this.stateTimer = 0;
           }
+          // 不管睡不睡，都重置计时，避免立刻连触发
+          this.stateTimer = 0;
         }
         break;
       }
@@ -317,9 +307,8 @@ class Cat {
       }
     }
 
-    // 6) 出屏重生
-    if (this.x < -this.width - 50 ||
-        this.x > window.innerWidth + 50) {
+    // 6) 出屏重生（以“完全不可见”为准）
+    if (this.x < -this.width + 5 || this.x > window.innerWidth - 5) {
       this.x = window.innerWidth + 50;
       this.y = this.randomY();
 
