@@ -48,6 +48,41 @@
       color: #333;
       pointer-events: none;
     }
+    
+    #fx{
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #fx .msg{
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%,-50%);
+      font-size: 40px;
+      font-family: "PingFang SC","Microsoft YaHei",sans-serif;
+      color: rgba(20,20,20,.85);
+      text-shadow: 0 2px 10px rgba(0,0,0,.08);
+      opacity: 0;
+      animation: msgIn .25s ease-out forwards;
+    }
+    @keyframes msgIn{
+      to{ opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    }
+    #fx .confetti{
+      position:absolute;
+      width:8px;
+      height:14px;
+      border-radius:2px;
+      opacity:.9;
+      animation: fall 1.8s linear forwards;
+    }
+    @keyframes fall{
+      from{ transform: translate3d(0,-30px,0) rotate(0deg); opacity: 1; }
+      to  { transform: translate3d(0,680px,0) rotate(540deg); opacity: 0; }
+    }
+
   </style>
 </head>
 <body>
@@ -61,6 +96,8 @@
     <button id="resetBtn">重置</button>
     <div id="timer">00:00</div>
   </div>
+
+  <div id="fx"></div>
 
   <script>
     /********************
@@ -157,6 +194,9 @@ class Cat {
 
     // 工作模式判断
     this.isWorkMode = false;
+    
+    this.script = null;          // { type, t, phase, ... }
+    this.prevStateBeforeScript = null;
   }
 
   randomY() {
@@ -198,6 +238,13 @@ class Cat {
   update(dt) {
     if (this.interactCooldown > 0) {
       this.interactCooldown -= dt * 1000;
+    }
+
+    // ===== 脚本模式：倒计时结束演出（最高优先级）=====
+    if (this.script) {
+      this.runScript(dt);
+      this.applyPosition(dt);
+      return; // 直接跳过后面的正常状态机
     }
 
     // ===== 长时间待机（最高优先级） =====
@@ -322,6 +369,45 @@ class Cat {
     this.applyPosition(dt);
   }
 
+  runScript(dt) {
+    const s = this.script;
+    s.t += dt * 1000;
+
+    // phase 0: 走向目标点（文字左边）
+    if (s.phase === 0) {
+      // 强制 walk 动画
+      if (this.state !== "walk") {
+        this.state = "walk";
+        this.stateTimer = 0;
+        this.setAction(ACTIONS.walk);
+      }
+
+      // 只在脚本中移动
+      this.x += s.vx * dt;
+
+      // 到达目标点：切到扑倒
+      if (this.x <= s.targetX) {
+        this.x = s.targetX;
+        this.state = "pounce";
+        this.stateTimer = 0;
+        this.setAction(ACTIONS.pounce);
+        s.phase = 1;
+        s.t = 0;
+      }
+      return;
+    }
+
+    // phase 1: 扑倒播放完成后保持不动等待结束
+    if (s.phase === 1) {
+      // pounce 结束后，停在最后一帧（你的状态机里本来会转 rest，我们这里不让它转）
+      const last = this.action.frames.length - 1;
+      if (this.frameIndex >= last) this.frameIndex = last;
+
+      // 等脚本结束时间到（由外部调用 stopScript）
+      return;
+    }
+  }
+
   applyPosition(dt = 0) {
     let extra = "";
 
@@ -392,11 +478,8 @@ class Cat {
             timer = 0;
             updateDisplay();
 
-            // 时间到 → 猫提醒
-            cat.state = "pounce";
-            cat.stateTimer = 0;
-            cat.setAction(ACTIONS.pounce);
-
+            // 时间到 → 猫扑倒，辛苦啦彩带
+            playCongrats();
             return;
           }
           updateDisplay();
@@ -433,6 +516,70 @@ class Cat {
         // 不强制重置位置，只确保不会 NaN
         cat.x = Math.min(cat.x, window.innerWidth + 50);
       });
+
+function playCongrats() {
+  const fx = document.getElementById("fx");
+  fx.innerHTML = ""; // 清理旧特效（避免连触发）
+
+  // 1) 文字
+  const msg = document.createElement("div");
+  msg.className = "msg";
+  msg.textContent = "辛苦啦";
+  fx.appendChild(msg);
+
+  // 2) 彩带（零星彩带：用小纸片模拟）
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  // 文字大概在正中间，我们从上方散落
+  const centerX = W * 0.5;
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElement("div");
+    c.className = "confetti";
+
+    // 从中间附近散开
+    const x = centerX + (Math.random() - 0.5) * 420;
+    const y = -20 - Math.random() * 120;
+
+    c.style.left = `${x}px`;
+    c.style.top = `${y}px`;
+    c.style.background = `hsl(${Math.floor(Math.random()*360)} 85% 60%)`;
+    c.style.animationDelay = `${Math.random() * 0.4}s`;
+    c.style.transform = `rotate(${Math.random()*180}deg)`;
+
+    fx.appendChild(c);
+  }
+
+  // 3) 猫脚本：从右侧走到文字左边，然后扑倒
+  //    如果当时在 sleep/rest/pounce，都强制醒来接管
+  cat.prevStateBeforeScript = cat.state;
+
+  // 把猫放到“舞台”右侧外面，y 对齐文字附近（稍微偏下更像站在字旁边）
+  const targetY = H * 0.55 + 30;        // 你可以调
+  cat.y = Math.max(H * 0.2, Math.min(targetY, H - 140));
+  cat.x = W + 60;
+
+  const targetX = W * 0.5 - 220;        // “文字左边”位置（你可以调 -220 这个距离）
+  cat.script = {
+    type: "congrats",
+    phase: 0,
+    t: 0,
+    vx: -420,        // 走过速度（px/s），你可以调快慢
+    targetX
+  };
+
+  // 4) 5 秒后收场：清除 fx，退出脚本，恢复正常
+  setTimeout(() => {
+    fx.innerHTML = "";
+
+    // 退出脚本，恢复正常走路（不恢复 sleep，避免又睡死）
+    cat.script = null;
+    cat.state = "walk";
+    cat.stateTimer = 0;
+    cat.walkDuration = cat.randomWalkDuration();
+    cat.setAction(ACTIONS.walk);
+  }, 5000);
+}
 
       // 鼠标逗猫监听
       window.addEventListener("mousemove", e => {
